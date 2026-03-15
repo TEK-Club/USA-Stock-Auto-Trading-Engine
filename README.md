@@ -26,6 +26,15 @@ AT vol.2/
 └── requirements.txt    # Python dependencies
 ```
 
+## 📥 Get the code
+
+No GitHub account or key is required to get or run the code (when the repo is public).
+
+- **With Git:** `git clone https://github.com/YOUR_USERNAME/AT-vol.2.git`
+- **Without Git:** On GitHub, click **Code → Download ZIP**, then unzip.
+
+**First-time setup:** Install Python 3.11+, create a virtual environment, run `pip install -r BackEnd/requirements.txt`, copy `BackEnd/.env.example` to `BackEnd/.env` (for paper mode you can leave KIS and Discord blank), set `mode: "paper"` in `BackEnd/usa_stock_trading_config.yaml`, then run `cd BackEnd && python main.py`. Optionally start the web dashboard from `FrontEnd/` (see below).
+
 ## 🚀 Quick Start
 
 ### 1. Setup Environment
@@ -41,12 +50,12 @@ python -m venv venv
 source venv/bin/activate
 
 # Install dependencies
-pip install -r requirements.txt
+pip install -r BackEnd/requirements.txt
 ```
 
 ### 2. Configuration
 
-1. Copy `.env.example` to `.env` and add your API credentials:
+1. Copy `BackEnd/.env.example` to `BackEnd/.env` and add your API credentials (for paper mode you can leave them blank):
    - KIS API keys (for live trading)
    - Discord bot token and channel ID (for notifications)
 
