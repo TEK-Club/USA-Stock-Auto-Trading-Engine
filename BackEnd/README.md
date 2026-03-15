@@ -102,10 +102,7 @@ pip install -r requirements.txt
 
 ### 2. Configuration
 
-1. Copy `.env.example` to `.env` and add your API credentials:
-   - KIS API keys
-   - Discord bot token and channel ID
-
+1. Copy `accounts.yaml.example` to `accounts.yaml` (in repo root or this directory) and add your KIS credentials (use the `paper` or `live` section to match the mode in the main config). Optionally add Discord `bot_token` and `channel_id` under the `discord` section for notifications.
 2. Review and customize `usa_stock_trading_config.yaml`:
    - Set trading mode (`paper` or `live`)
    - Configure symbols to trade

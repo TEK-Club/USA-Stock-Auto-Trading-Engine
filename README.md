@@ -33,7 +33,7 @@ No GitHub account or key is required to get or run the code (when the repo is pu
 - **With Git:** `git clone https://github.com/YOUR_USERNAME/AT-vol.2.git`
 - **Without Git:** On GitHub, click **Code → Download ZIP**, then unzip.
 
-**First-time setup:** Install Python 3.11+, create a virtual environment, run `pip install -r BackEnd/requirements.txt`, copy `BackEnd/.env.example` to `BackEnd/.env` (for paper mode you can leave KIS and Discord blank), set `mode: "paper"` in `BackEnd/usa_stock_trading_config.yaml`, then run `cd BackEnd && python main.py`. Optionally start the web dashboard from `FrontEnd/` (see below).
+**First-time setup:** Install Python 3.11+, create a virtual environment, run `pip install -r BackEnd/requirements.txt`, copy `accounts.yaml.example` to `accounts.yaml` and add your KIS credentials (use the `paper` section for paper trading), set `mode: "paper"` in `BackEnd/usa_stock_trading_config.yaml`, then run `cd BackEnd && python main.py`. Optionally start the web dashboard from `FrontEnd/` (see below).
 
 ## 🚀 Quick Start
 
@@ -55,9 +55,9 @@ pip install -r BackEnd/requirements.txt
 
 ### 2. Configuration
 
-1. Copy `BackEnd/.env.example` to `BackEnd/.env` and add your API credentials (for paper mode you can leave them blank):
-   - KIS API keys (for live trading)
-   - Discord bot token and channel ID (for notifications)
+1. Copy `accounts.yaml.example` to `accounts.yaml` (in repo root or `BackEnd/`) and fill in your credentials:
+   - **KIS:** Use the `paper` section for paper trading, `live` for live trading (matches `mode` in the main config).
+   - **Discord:** Optional; add `bot_token` and `channel_id` under `discord` for trade notifications, or leave blank to disable.
 
 2. Configure `BackEnd/usa_stock_trading_config.yaml`:
    - Set trading mode: `paper` (recommended for testing) or `live`

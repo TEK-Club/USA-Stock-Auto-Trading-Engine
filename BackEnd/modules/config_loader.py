@@ -299,14 +299,46 @@ class ConfigLoader:
             "Configuration file not found. Please create usa_stock_trading_config.yaml"
         )
     
+    def _find_accounts_yaml(self) -> Optional[Path]:
+        """Find accounts.yaml in repo root or BackEnd (same dir as this module's parent)."""
+        back_end = Path(__file__).parent.parent
+        repo_root = back_end.parent
+        for base in (repo_root, back_end):
+            path = base / "accounts.yaml"
+            if path.exists():
+                return path
+        return None
+    
     def load(self) -> TradingConfig:
         """Load and validate configuration"""
         with open(self.config_path, 'r', encoding='utf-8') as f:
             raw_config = yaml.safe_load(f)
         
-        # Inject environment variables
-        raw_config['kis'] = KISConfig.from_env().model_dump()
-        raw_config['discord'] = DiscordConfig.from_env().model_dump()
+        mode = raw_config.get('mode', 'paper')
+        # KIS: load only from accounts.yaml (copy accounts.yaml.example to accounts.yaml)
+        accounts_path = self._find_accounts_yaml()
+        if accounts_path is None:
+            raise FileNotFoundError(
+                "accounts.yaml not found. Copy accounts.yaml.example to accounts.yaml (in repo root or BackEnd/) and add your KIS credentials."
+            )
+        with open(accounts_path, 'r', encoding='utf-8') as f:
+            accounts = yaml.safe_load(f) or {}
+        section = accounts.get(mode, {})
+        raw_config['kis'] = {
+            'app_key': section.get('app_key', ''),
+            'app_secret': section.get('app_secret', ''),
+            'account_number': section.get('account_number', ''),
+            'account_prod': section.get('account_prod', '01'),
+        }
+        # Discord: from accounts.yaml if present, else environment
+        discord_section = accounts.get('discord')
+        if discord_section is not None:
+            raw_config['discord'] = {
+                'bot_token': str(discord_section.get('bot_token', '')),
+                'channel_id': int(discord_section.get('channel_id', 0) or 0),
+            }
+        else:
+            raw_config['discord'] = DiscordConfig.from_env().model_dump()
         
         # Validate with Pydantic
         self.config = TradingConfig(**raw_config)
@@ -321,14 +353,14 @@ class ConfigLoader:
             errors.append("Configuration not loaded")
             return False, errors
         
-        # Check for required API credentials in live mode
+        # Check for required API credentials in live mode (from accounts.yaml)
         if self.config.mode == 'live':
             if not self.config.kis.app_key:
-                errors.append("KIS_APP_KEY not set (required for live trading)")
+                errors.append("accounts.yaml [live].app_key not set (required for live trading)")
             if not self.config.kis.app_secret:
-                errors.append("KIS_APP_SECRET not set (required for live trading)")
+                errors.append("accounts.yaml [live].app_secret not set (required for live trading)")
             if not self.config.kis.account_number:
-                errors.append("KIS_ACCOUNT_NUMBER not set (required for live trading)")
+                errors.append("accounts.yaml [live].account_number not set (required for live trading)")
         
         # Check symbols
         if not self.config.symbols:

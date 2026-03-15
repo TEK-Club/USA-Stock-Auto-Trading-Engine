@@ -1,0 +1,20 @@
+# Account configuration for paper trading and live trading
+# Copy this file to accounts.yaml and fill in your credentials.
+# DO NOT commit accounts.yaml to version control - it contains sensitive data.
+
+paper:
+  app_key: ""       # KIS API app key for paper trading
+  app_secret: ""    # KIS API app secret for paper trading
+  account_number: "" # Account number for paper trading
+  account_prod: "01" # Account production code (01 for paper/virtual trading)
+
+live:
+  app_key: ""       # KIS API app key for live trading
+  app_secret: ""    # KIS API app secret for live trading
+  account_number: "" # Account number for live trading
+  account_prod: "01" # Account production code (01 for live trading)
+
+# Discord notifications (optional; leave blank to disable)
+discord:
+  bot_token: ""     # Discord bot token
+  channel_id: 0    # Channel ID for trade alerts
