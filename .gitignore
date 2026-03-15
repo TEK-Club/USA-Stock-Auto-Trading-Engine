@@ -96,10 +96,8 @@ FrontEnd/test_*.py
 Finan_Study/
 Files/
 
-# Beads (agent memory)
-.beads/beads.db
-.beads/*.db
-.beads/interactions.jsonl
+# Beads (agent memory) - exclude entire directory
+.beads/
 
 # Historical data cache (parquet files)
 **/hist_cache/
