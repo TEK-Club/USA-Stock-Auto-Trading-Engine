@@ -1,0 +1,98 @@
+{% load static %}
+
+<!-- Sidebar -->
+<aside class="sidebar" id="sidebar">
+  <div class="sidebar-header">
+    <a href="{% url 'trading_app:dashboard' %}" class="sidebar-logo">
+      <span class="sidebar-logo-icon">📈</span>
+      <span class="sidebar-logo-text">AT vol.2</span>
+    </a>
+  </div>
+
+  <nav class="sidebar-nav">
+    <div class="nav-section">
+      <div class="nav-section-title">Overview</div>
+      <a href="{% url 'trading_app:dashboard' %}" class="nav-item {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}">
+        <span class="nav-item-icon">🏠</span>
+        <span class="nav-item-text">Dashboard</span>
+      </a>
+      <a href="{% url 'trading_app:positions' %}" class="nav-item {% if request.resolver_match.url_name == 'positions' %}active{% endif %}">
+        <span class="nav-item-icon">💼</span>
+        <span class="nav-item-text">Positions</span>
+      </a>
+      <a href="{% url 'trading_app:chart' %}" class="nav-item {% if request.resolver_match.url_name == 'chart' %}active{% endif %}">
+        <span class="nav-item-icon">📊</span>
+        <span class="nav-item-text">Chart</span>
+      </a>
+    </div>
+
+    <div class="nav-section">
+      <div class="nav-section-title">Trading</div>
+      <a href="{% url 'trading_app:trading_log' %}" class="nav-item {% if request.resolver_match.url_name == 'trading_log' %}active{% endif %}">
+        <span class="nav-item-icon">📜</span>
+        <span class="nav-item-text">Trading Log</span>
+      </a>
+      <a href="{% url 'trading_app:performance' %}" class="nav-item {% if request.resolver_match.url_name == 'performance' %}active{% endif %}">
+        <span class="nav-item-icon">📈</span>
+        <span class="nav-item-text">Performance</span>
+      </a>
+    </div>
+
+    <div class="nav-section">
+      <div class="nav-section-title">System</div>
+      <a href="{% url 'trading_app:risk_dashboard' %}" class="nav-item {% if request.resolver_match.url_name == 'risk_dashboard' %}active{% endif %}">
+        <span class="nav-item-icon">⚠️</span>
+        <span class="nav-item-text">Risk Dashboard</span>
+      </a>
+      <a href="{% url 'trading_app:market_status' %}" class="nav-item {% if request.resolver_match.url_name == 'market_status' %}active{% endif %}">
+        <span class="nav-item-icon">🔔</span>
+        <span class="nav-item-text">Market Status</span>
+      </a>
+      <a href="{% url 'trading_app:ml_insights' %}" class="nav-item {% if request.resolver_match.url_name == 'ml_insights' %}active{% endif %}">
+        <span class="nav-item-icon">🤖</span>
+        <span class="nav-item-text">ML Insights</span>
+      </a>
+      <a href="{% url 'trading_app:settings' %}" class="nav-item {% if request.resolver_match.url_name == 'settings' %}active{% endif %}">
+        <span class="nav-item-icon">⚙️</span>
+        <span class="nav-item-text">Settings</span>
+      </a>
+    </div>
+  </nav>
+
+  <div class="sidebar-footer">
+    <div class="connection-status" id="connection-status">
+      <span class="status-dot"></span>
+      <span class="status-text">Connecting...</span>
+    </div>
+    <button class="sidebar-toggle" id="sidebar-toggle" title="Toggle sidebar">
+      <span>◀</span>
+    </button>
+  </div>
+</aside>
+
+<!-- Sidebar overlay for mobile -->
+<div class="sidebar-overlay" id="sidebar-overlay"></div>
+
+<!-- Mobile bottom navigation -->
+<nav class="mobile-nav">
+  <a href="{% url 'trading_app:dashboard' %}" class="mobile-nav-item {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}">
+    <span class="mobile-nav-item-icon">🏠</span>
+    <span>Home</span>
+  </a>
+  <a href="{% url 'trading_app:positions' %}" class="mobile-nav-item {% if request.resolver_match.url_name == 'positions' %}active{% endif %}">
+    <span class="mobile-nav-item-icon">💼</span>
+    <span>Positions</span>
+  </a>
+  <a href="{% url 'trading_app:chart' %}" class="mobile-nav-item {% if request.resolver_match.url_name == 'chart' %}active{% endif %}">
+    <span class="mobile-nav-item-icon">📊</span>
+    <span>Chart</span>
+  </a>
+  <a href="{% url 'trading_app:trading_log' %}" class="mobile-nav-item {% if request.resolver_match.url_name == 'trading_log' %}active{% endif %}">
+    <span class="mobile-nav-item-icon">📜</span>
+    <span>Trades</span>
+  </a>
+  <a href="{% url 'trading_app:settings' %}" class="mobile-nav-item {% if request.resolver_match.url_name == 'settings' %}active{% endif %}">
+    <span class="mobile-nav-item-icon">⚙️</span>
+    <span>Settings</span>
+  </a>
+</nav>

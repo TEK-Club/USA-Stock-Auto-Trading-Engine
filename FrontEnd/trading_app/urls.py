@@ -16,4 +16,7 @@ urlpatterns = [
     path('market-status/', views.market_status, name='market_status'),
     path('ml-insights/', views.ml_insights, name='ml_insights'),
     path('chart/', views.chart, name='chart'),
+    path('settings/', views.settings_page, name='settings'),
+    path('export/trades/', views.export_trades_csv, name='export_trades'),
+    path('export/positions/', views.export_positions_csv, name='export_positions'),
 ]

@@ -3,156 +3,189 @@
 
 {% block title %}Dashboard{% endblock %}
 
+{% block page_title %}Dashboard{% endblock %}
+
 {% block content %}
-<div class="row mb-4">
-    <div class="col-md-3">
-        <div class="card text-white bg-primary">
-            <div class="card-body">
-                <h5 class="card-title">Total Balance</h5>
-                <h2 class="card-text">
-                    {% if daily_pnl.ending_balance_krw %}
-                        {{ daily_pnl.ending_balance_krw|floatformat:0 }} KRW
-                    {% else %}
-                        N/A
-                    {% endif %}
-                </h2>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-3">
-        <div class="card text-white {% if daily_pnl.realized_pnl_krw >= 0 %}bg-success{% else %}bg-danger{% endif %}">
-            <div class="card-body">
-                <h5 class="card-title">Today's P&L</h5>
-                <h2 class="card-text">
-                    {{ daily_pnl.realized_pnl_krw|default:0|floatformat:0 }} KRW
-                </h2>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-3">
-        <div class="card text-white {% if total_unrealized_pnl_krw >= 0 %}bg-success{% else %}bg-danger{% endif %}">
-            <div class="card-body">
-                <h5 class="card-title">Unrealized P&L</h5>
-                <h2 class="card-text">
-                    {{ total_unrealized_pnl_krw|floatformat:0 }} KRW
-                </h2>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-3">
-        <div class="card text-white bg-info">
-            <div class="card-body">
-                <h5 class="card-title">Open Positions</h5>
-                <h2 class="card-text">{{ position_count }}</h2>
-            </div>
-        </div>
-    </div>
-</div>
-
-<div class="row mb-4">
-    <div class="col-md-8">
-        <div class="card">
-            <div class="card-header">
-                <h5>P&L History (Last 30 Days)</h5>
-            </div>
-            <div class="card-body">
-                <canvas id="pnlChart" height="100"></canvas>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-4">
-        <div class="card">
-            <div class="card-header">
-                <h5>Recent Trades</h5>
-            </div>
-            <div class="card-body" style="max-height: 400px; overflow-y: auto;">
-                {% if recent_trades %}
-                    <table class="table table-sm">
-                        <thead>
-                            <tr>
-                                <th>Time</th>
-                                <th>Symbol</th>
-                                <th>Side</th>
-                                <th>Qty</th>
-                                <th>Price</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for trade in recent_trades %}
-                            <tr>
-                                <td>{{ trade.executed_at|date:"H:i" }}</td>
-                                <td><strong>{{ trade.symbol }}</strong></td>
-                                <td>
-                                    <span class="badge {% if trade.side == 'buy' %}bg-success{% else %}bg-danger{% endif %}">
-                                        {{ trade.side|upper }}
-                                    </span>
-                                </td>
-                                <td>{{ trade.quantity }}</td>
-                                <td>${{ trade.price_usd|floatformat:2 }}</td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
+<!-- Stats Cards -->
+<div class="grid grid-cols-4" style="margin-bottom: var(--space-6);">
+    <div class="card stat-card">
+        <div class="card-body">
+            <div class="stat-label">Total Balance</div>
+            <div class="stat-value font-mono">
+                {% if daily_pnl.ending_balance_krw %}
+                    ₩{{ daily_pnl.ending_balance_krw|floatformat:0 }}
                 {% else %}
-                    <p class="text-muted">No recent trades</p>
+                    N/A
                 {% endif %}
             </div>
         </div>
     </div>
-</div>
-
-<div class="row">
-    <div class="col-12">
-        <div class="card">
-            <div class="card-header d-flex justify-content-between align-items-center">
-                <h5>Current Positions</h5>
-                <a href="{% url 'trading_app:positions' %}" class="btn btn-sm btn-primary">View All</a>
+    
+    <div class="card stat-card {% if daily_pnl.realized_pnl_krw >= 0 %}{% else %}danger{% endif %}">
+        <div class="card-body">
+            <div class="stat-label">Today's P&L</div>
+            <div class="stat-value font-mono {% if daily_pnl.realized_pnl_krw >= 0 %}positive{% else %}negative{% endif %}">
+                {% if daily_pnl.realized_pnl_krw >= 0 %}+{% endif %}₩{{ daily_pnl.realized_pnl_krw|default:0|floatformat:0 }}
             </div>
-            <div class="card-body">
-                {% if positions %}
-                    <div class="table-responsive">
-                        <table class="table table-hover">
-                            <thead>
-                                <tr>
-                                    <th>Symbol</th>
-                                    <th>Quantity</th>
-                                    <th>Avg Price</th>
-                                    <th>Current Price</th>
-                                    <th>Unrealized P&L</th>
-                                    <th>Stop Loss</th>
-                                    <th>Take Profit</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for pos in positions %}
-                                <tr>
-                                    <td><strong>{{ pos.symbol }}</strong></td>
-                                    <td>{{ pos.quantity }}</td>
-                                    <td>${{ pos.avg_price_usd|floatformat:2 }}</td>
-                                    <td>${{ pos.current_price_usd|floatformat:2|default:"N/A" }}</td>
-                                    <td class="{% if pos.unrealized_pnl_krw >= 0 %}text-success{% else %}text-danger{% endif %}">
-                                        {{ pos.unrealized_pnl_krw|floatformat:0 }} KRW
-                                        ({{ pos.unrealized_pnl_usd|floatformat:2 }} USD)
-                                    </td>
-                                    <td>${{ pos.stop_loss|floatformat:2|default:"N/A" }}</td>
-                                    <td>${{ pos.take_profit|floatformat:2|default:"N/A" }}</td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
-                {% else %}
-                    <p class="text-muted">No open positions</p>
-                {% endif %}
+            <div class="stat-change {% if daily_pnl.realized_pnl_krw >= 0 %}up{% else %}down{% endif %}">
+                <span>{% if daily_pnl.realized_pnl_krw >= 0 %}↑{% else %}↓{% endif %}</span>
+                <span>Today</span>
             </div>
         </div>
+    </div>
+    
+    <div class="card stat-card {% if total_unrealized_pnl_krw >= 0 %}{% else %}danger{% endif %}">
+        <div class="card-body">
+            <div class="stat-label">Unrealized P&L</div>
+            <div class="stat-value font-mono {% if total_unrealized_pnl_krw >= 0 %}positive{% else %}negative{% endif %}">
+                {% if total_unrealized_pnl_krw >= 0 %}+{% endif %}₩{{ total_unrealized_pnl_krw|floatformat:0 }}
+            </div>
+        </div>
+    </div>
+    
+    <div class="card stat-card info">
+        <div class="card-body">
+            <div class="stat-label">Open Positions</div>
+            <div class="stat-value">{{ position_count }}</div>
+        </div>
+    </div>
+</div>
+
+<!-- Main Content Grid -->
+<div class="grid" style="grid-template-columns: 2fr 1fr; gap: var(--space-6);">
+    <!-- P&L Chart -->
+    <div class="card">
+        <div class="card-header">
+            <h3 class="card-title">
+                <span class="card-title-icon">📈</span>
+                P&L History (Last 30 Days)
+            </h3>
+            <div class="chart-controls">
+                <button class="chart-time-btn active" data-days="7">7D</button>
+                <button class="chart-time-btn" data-days="14">14D</button>
+                <button class="chart-time-btn" data-days="30">30D</button>
+            </div>
+        </div>
+        <div class="card-body">
+            <div class="chart-container">
+                <canvas id="pnlChart" style="max-height: 300px;"></canvas>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Recent Trades -->
+    <div class="card">
+        <div class="card-header">
+            <h3 class="card-title">
+                <span class="card-title-icon">📜</span>
+                Recent Trades
+            </h3>
+            <a href="{% url 'trading_app:trading_log' %}" class="btn btn-ghost btn-sm">View All</a>
+        </div>
+        <div class="card-body" style="padding: 0; max-height: 340px; overflow-y: auto;">
+            {% if recent_trades %}
+            <div class="table-container">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Time</th>
+                            <th>Symbol</th>
+                            <th>Side</th>
+                            <th class="text-right">Qty</th>
+                            <th class="text-right">Price</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for trade in recent_trades %}
+                        <tr>
+                            <td style="color: var(--color-text-secondary);">{{ trade.executed_at|date:"H:i" }}</td>
+                            <td><strong>{{ trade.symbol }}</strong></td>
+                            <td>
+                                <span class="badge {% if trade.side == 'buy' %}badge-buy{% else %}badge-sell{% endif %}">
+                                    {{ trade.side|upper }}
+                                </span>
+                            </td>
+                            <td class="text-right mono">{{ trade.quantity }}</td>
+                            <td class="text-right mono">${{ trade.price_usd|floatformat:2 }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div style="padding: var(--space-8); text-align: center; color: var(--color-text-muted);">
+                No recent trades
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Current Positions -->
+<div class="card" style="margin-top: var(--space-6);">
+    <div class="card-header">
+        <h3 class="card-title">
+            <span class="card-title-icon">💼</span>
+            Current Positions
+        </h3>
+        <div class="flex gap-2">
+            <a href="{% url 'trading_app:export_positions' %}" class="btn btn-ghost btn-sm">Export CSV</a>
+            <a href="{% url 'trading_app:positions' %}" class="btn btn-primary btn-sm">View All</a>
+        </div>
+    </div>
+    <div class="card-body" style="padding: 0;">
+        {% if positions %}
+        <div class="table-container">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Symbol</th>
+                        <th class="text-right">Quantity</th>
+                        <th class="text-right">Avg Price</th>
+                        <th class="text-right">Current Price</th>
+                        <th class="text-right">Unrealized P&L</th>
+                        <th class="text-right">Stop Loss</th>
+                        <th class="text-right">Take Profit</th>
+                        <th class="text-center">Chart</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for pos in positions %}
+                    <tr>
+                        <td><strong>{{ pos.symbol }}</strong></td>
+                        <td class="text-right mono">{{ pos.quantity }}</td>
+                        <td class="text-right mono">${{ pos.avg_price_usd|floatformat:2 }}</td>
+                        <td class="text-right mono">${{ pos.current_price_usd|floatformat:2|default:"N/A" }}</td>
+                        <td class="text-right {% if pos.unrealized_pnl_krw >= 0 %}text-success{% else %}text-danger{% endif %}">
+                            <div class="mono">₩{{ pos.unrealized_pnl_krw|floatformat:0 }}</div>
+                            <div class="mono" style="font-size: var(--font-size-xs); color: var(--color-text-secondary);">
+                                ${{ pos.unrealized_pnl_usd|floatformat:2 }}
+                            </div>
+                        </td>
+                        <td class="text-right mono">${{ pos.stop_loss|floatformat:2|default:"—" }}</td>
+                        <td class="text-right mono">${{ pos.take_profit|floatformat:2|default:"—" }}</td>
+                        <td class="text-center">
+                            <a href="{% url 'trading_app:chart' %}?symbol={{ pos.symbol }}" class="btn btn-ghost btn-sm">
+                                📊
+                            </a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div style="padding: var(--space-8); text-align: center; color: var(--color-text-muted);">
+            No open positions
+        </div>
+        {% endif %}
     </div>
 </div>
 {% endblock %}
 
 {% block extra_js %}
 <script>
-    // P&L Chart
+    // P&L Chart with dark theme
     const pnlData = [
         {% for pnl in pnl_history %}
         {
@@ -165,30 +198,101 @@
     if (pnlData.length > 0) {
         const ctx = document.getElementById('pnlChart').getContext('2d');
         
+        // Create gradient
+        const gradient = ctx.createLinearGradient(0, 0, 0, 300);
+        gradient.addColorStop(0, 'rgba(16, 185, 129, 0.3)');
+        gradient.addColorStop(1, 'rgba(16, 185, 129, 0)');
+        
         const chart = new Chart(ctx, {
             type: 'line',
             data: {
                 labels: pnlData.map(d => {
                     const date = new Date(d.date);
-                    return date.toLocaleDateString();
+                    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
                 }),
                 datasets: [{
                     label: 'Realized P&L (KRW)',
                     data: pnlData.map(d => d.realized_pnl_krw || 0),
-                    borderColor: 'rgb(75, 192, 192)',
-                    backgroundColor: 'rgba(75, 192, 192, 0.2)',
-                    tension: 0.1
+                    borderColor: '#10b981',
+                    backgroundColor: gradient,
+                    borderWidth: 2,
+                    fill: true,
+                    tension: 0.4,
+                    pointRadius: 0,
+                    pointHoverRadius: 6,
+                    pointHoverBackgroundColor: '#10b981',
+                    pointHoverBorderColor: '#fff',
+                    pointHoverBorderWidth: 2,
                 }]
             },
             options: {
                 responsive: true,
                 maintainAspectRatio: true,
+                interaction: {
+                    intersect: false,
+                    mode: 'index',
+                },
+                plugins: {
+                    legend: {
+                        display: false,
+                    },
+                    tooltip: {
+                        backgroundColor: 'rgba(30, 30, 46, 0.95)',
+                        titleColor: '#fff',
+                        bodyColor: 'rgba(255, 255, 255, 0.8)',
+                        borderColor: 'rgba(255, 255, 255, 0.1)',
+                        borderWidth: 1,
+                        padding: 12,
+                        cornerRadius: 8,
+                        callbacks: {
+                            label: function(context) {
+                                return '₩' + context.raw.toLocaleString();
+                            }
+                        }
+                    }
+                },
                 scales: {
+                    x: {
+                        grid: {
+                            color: 'rgba(255, 255, 255, 0.05)',
+                            drawBorder: false,
+                        },
+                        ticks: {
+                            color: 'rgba(255, 255, 255, 0.5)',
+                            font: { size: 11 },
+                        }
+                    },
                     y: {
-                        beginAtZero: false
+                        grid: {
+                            color: 'rgba(255, 255, 255, 0.05)',
+                            drawBorder: false,
+                        },
+                        ticks: {
+                            color: 'rgba(255, 255, 255, 0.5)',
+                            font: { size: 11 },
+                            callback: function(value) {
+                                return '₩' + (value / 1000).toFixed(0) + 'K';
+                            }
+                        }
                     }
                 }
             }
+        });
+        
+        // Chart time range buttons
+        document.querySelectorAll('.chart-time-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.chart-time-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                const days = parseInt(btn.dataset.days);
+                const filteredData = pnlData.slice(-days);
+                chart.data.labels = filteredData.map(d => {
+                    const date = new Date(d.date);
+                    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                });
+                chart.data.datasets[0].data = filteredData.map(d => d.realized_pnl_krw || 0);
+                chart.update();
+            });
         });
     }
 </script>

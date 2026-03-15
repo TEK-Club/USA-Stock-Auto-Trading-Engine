@@ -74,6 +74,13 @@ class USAStrategy:
         self.take_profit_atr_multiplier = config.get('take_profit_atr_multiplier', 3.0)
         self.risk_reward_ratio = config.get('risk_reward_ratio', 2.0)
 
+        # Dip buying: S&P 500 (index) + stock's own SMA to define bearish; buy oversold pullbacks.
+        self.dip_buy_enabled = config.get('dip_buy_enabled', False)
+        self.index_symbol = config.get('index_symbol', 'SPY')
+        self.index_sma_period = config.get('index_sma_period', 200)
+        self.dip_rsi_max = config.get('dip_rsi_max', 35)
+        self.dip_require_above_sma200 = config.get('dip_require_above_sma200', True)
+
         # Min data: SMA 200 is the longest
         self.min_data_points = max(
             self.sma_200,
@@ -193,14 +200,20 @@ class USAStrategy:
         df: pd.DataFrame,
         symbol: str,
         current_position: Optional[Dict] = None,
+        market_bearish: Optional[bool] = None,
     ) -> TradeSignal:
         """
         Long-only entry logic:
 
+        Trend-following:
         1. Trend filter: Price > SMA 200
         2. Signal: EMA 12 crosses above EMA 26 (MACD crosses above 0)
         3. Overbought protection: RSI(14) < 70
         4. Confirmation: SMA 50 trending up OR Price > SMA 50
+
+        Dip buying (option B, when enabled): when market (S&P 500) or stock is bearish/sideways
+        (index below its SMA and/or stock below its SMA 50/200), allow buy if RSI oversold
+        and optionally stock still above SMA 200.
         """
         if len(df) < self.min_data_points:
             return TradeSignal(
@@ -227,28 +240,70 @@ class USAStrategy:
         signal = Signal.HOLD
         reason = "No clear signal"
 
+        # --- Regime: review market (index) and stock to choose strategy ---
+        sma_50 = latest['SMA_50']
+        sma_200 = latest['SMA_200']
+        stock_above_sma200 = price > sma_200 if pd.notna(sma_200) else False
+        stock_above_sma50 = price > sma_50 if pd.notna(sma_50) else False
+        stock_bullish = stock_above_sma200 and stock_above_sma50
+        stock_bearish = not stock_bullish  # below SMA 50 or below SMA 200
+        market_bullish = market_bearish is False
+        # Use bearish (dip-buy) strategy when market or stock is bearish; else use bullish (trend) strategy
+        use_bearish_strategy = (
+            self.dip_buy_enabled
+            and (market_bearish is True or stock_bearish)
+        )
+        use_bullish_strategy = not use_bearish_strategy  # trend-following
+
         # --- BUY (long only when no position) ---
         if current_position is None:
-            # 1) Trend: Price > SMA 200
-            ok_trend = price > latest['SMA_200']
-            # 2) EMA 12 crosses above EMA 26  =>  MACD crosses above 0
-            ok_cross = bool(latest.get('MACD_cross_above_zero', False))
-            # 3) RSI < 70 (overbought protection)
-            ok_rsi = latest['RSI'] < self.rsi_overbought
-            # 4) SMA 50 trending up OR Price > SMA 50
-            ok_confirm = bool(latest.get('SMA_50_up', False)) or (price > latest['SMA_50'])
+            if use_bullish_strategy:
+                # Bullish regime: trend-following only
+                # 1) Trend: Price > SMA 200
+                ok_trend = price > latest['SMA_200']
+                # 2) EMA 12 crosses above EMA 26  =>  MACD crosses above 0
+                ok_cross = bool(latest.get('MACD_cross_above_zero', False))
+                # 3) RSI < 70 (overbought protection)
+                ok_rsi = latest['RSI'] < self.rsi_overbought
+                # 4) SMA 50 trending up OR Price > SMA 50
+                ok_confirm = bool(latest.get('SMA_50_up', False)) or (price > latest['SMA_50'])
 
-            if ok_trend and ok_cross and ok_rsi and ok_confirm:
-                signal = Signal.BUY
-                reason = "Trend+EMA cross+RSI+SMA50 confirm"
-            elif not ok_trend:
-                reason = "Price below SMA 200"
-            elif not ok_cross:
-                reason = "No EMA12/26 bullish cross (MACD not above 0)"
-            elif not ok_rsi:
-                reason = f"RSI overbought (>= {self.rsi_overbought})"
-            elif not ok_confirm:
-                reason = "SMA50 not rising and Price <= SMA50"
+                if ok_trend and ok_cross and ok_rsi and ok_confirm:
+                    signal = Signal.BUY
+                    reason = "Regime: bullish — Trend+EMA cross+RSI+SMA50 confirm"
+                elif not ok_trend:
+                    reason = "Regime: bullish — Price below SMA 200"
+                elif not ok_cross:
+                    reason = "Regime: bullish — No EMA12/26 bullish cross (MACD not above 0)"
+                elif not ok_rsi:
+                    reason = f"Regime: bullish — RSI overbought (>= {self.rsi_overbought})"
+                elif not ok_confirm:
+                    reason = "Regime: bullish — SMA50 not rising and Price <= SMA50"
+
+            if use_bearish_strategy and signal == Signal.HOLD:
+                # Bearish regime: dip-buy only (market or stock bearish/sideways + oversold)
+                rsi = latest['RSI']
+                stock_below_sma50 = not stock_above_sma50
+                stock_below_sma200 = not stock_above_sma200
+                market_or_stock_bearish = (
+                    (market_bearish is True)
+                    or stock_below_sma50
+                    or stock_below_sma200
+                )
+                rsi_oversold_for_dip = rsi < self.dip_rsi_max if pd.notna(rsi) else False
+                safety = (price > sma_200) if self.dip_require_above_sma200 else True
+                if pd.notna(sma_200):
+                    safety = safety and (sma_200 > 0)
+                if market_or_stock_bearish and rsi_oversold_for_dip and safety:
+                    signal = Signal.BUY
+                    reason = "Regime: bearish — Dip buy (market or stock pullback, RSI oversold)"
+                else:
+                    if not market_or_stock_bearish:
+                        reason = "Regime: bearish — No dip (market and stock not bearish)"
+                    elif not rsi_oversold_for_dip:
+                        reason = f"Regime: bearish — RSI not oversold (>= {self.dip_rsi_max})"
+                    elif not safety:
+                        reason = "Regime: bearish — Dip buy skipped (price below SMA 200)"
 
         # --- SELL: in position, trend breakdown (price < SMA 200) ---
         if current_position is not None and price < latest['SMA_200']:

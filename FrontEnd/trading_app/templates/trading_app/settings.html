@@ -1,0 +1,234 @@
+{% extends 'trading_app/base.html' %}
+{% load static %}
+
+{% block title %}Settings{% endblock %}
+
+{% block page_title %}Settings{% endblock %}
+
+{% block breadcrumb %}
+<span>/</span>
+<span>Settings</span>
+{% endblock %}
+
+{% block content %}
+<div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));">
+    <!-- Appearance Settings -->
+    <div class="card">
+        <div class="card-header">
+            <h3 class="card-title">
+                <span class="card-title-icon">🎨</span>
+                Appearance
+            </h3>
+        </div>
+        <div class="card-body">
+            <form method="POST" action="{% url 'trading_app:settings' %}">
+                {% csrf_token %}
+                
+                <div class="form-group">
+                    <label class="form-label">Theme</label>
+                    <select name="theme" class="form-select" id="theme-select">
+                        {% for t in themes %}
+                        <option value="{{ t.value }}" {% if t.value == theme %}selected{% endif %}>
+                            {{ t.label }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Display Currency</label>
+                    <select name="currency" class="form-select">
+                        {% for c in currencies %}
+                        <option value="{{ c.value }}" {% if c.value == currency %}selected{% endif %}>
+                            {{ c.label }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Timezone</label>
+                    <select name="timezone" class="form-select">
+                        {% for tz in timezones %}
+                        <option value="{{ tz.value }}" {% if tz.value == timezone %}selected{% endif %}>
+                            {{ tz.label }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <button type="submit" class="btn btn-primary">Save Changes</button>
+            </form>
+        </div>
+    </div>
+    
+    <!-- Notification Settings -->
+    <div class="card">
+        <div class="card-header">
+            <h3 class="card-title">
+                <span class="card-title-icon">🔔</span>
+                Notifications
+            </h3>
+        </div>
+        <div class="card-body">
+            <div class="form-group">
+                <label class="flex items-center gap-4" style="cursor: pointer;">
+                    <input type="checkbox" id="notify-trades" checked style="width: 18px; height: 18px;">
+                    <span>Trade Executions</span>
+                </label>
+                <p class="text-muted" style="margin-left: 34px; font-size: var(--font-size-sm); margin-top: var(--space-1);">
+                    Get notified when trades are executed
+                </p>
+            </div>
+            
+            <div class="form-group">
+                <label class="flex items-center gap-4" style="cursor: pointer;">
+                    <input type="checkbox" id="notify-pnl" checked style="width: 18px; height: 18px;">
+                    <span>P&L Alerts</span>
+                </label>
+                <p class="text-muted" style="margin-left: 34px; font-size: var(--font-size-sm); margin-top: var(--space-1);">
+                    Notify when daily P&L exceeds thresholds
+                </p>
+            </div>
+            
+            <div class="form-group">
+                <label class="flex items-center gap-4" style="cursor: pointer;">
+                    <input type="checkbox" id="notify-system" checked style="width: 18px; height: 18px;">
+                    <span>System Alerts</span>
+                </label>
+                <p class="text-muted" style="margin-left: 34px; font-size: var(--font-size-sm); margin-top: var(--space-1);">
+                    Circuit breaker, API errors, connection issues
+                </p>
+            </div>
+            
+            <div class="form-group">
+                <label class="flex items-center gap-4" style="cursor: pointer;">
+                    <input type="checkbox" id="notify-browser" style="width: 18px; height: 18px;">
+                    <span>Browser Notifications</span>
+                </label>
+                <p class="text-muted" style="margin-left: 34px; font-size: var(--font-size-sm); margin-top: var(--space-1);">
+                    Enable desktop push notifications
+                </p>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Data Export -->
+    <div class="card">
+        <div class="card-header">
+            <h3 class="card-title">
+                <span class="card-title-icon">📊</span>
+                Data Export
+            </h3>
+        </div>
+        <div class="card-body">
+            <p style="color: var(--color-text-secondary); margin-bottom: var(--space-4);">
+                Export your trading data for analysis or record keeping.
+            </p>
+            
+            <div class="flex flex-col gap-4">
+                <a href="{% url 'trading_app:export_trades' %}" class="btn btn-secondary" style="justify-content: flex-start;">
+                    <span>📜</span>
+                    <span>Export Trades (CSV)</span>
+                </a>
+                
+                <a href="{% url 'trading_app:export_positions' %}" class="btn btn-secondary" style="justify-content: flex-start;">
+                    <span>💼</span>
+                    <span>Export Positions (CSV)</span>
+                </a>
+            </div>
+        </div>
+    </div>
+    
+    <!-- System Status -->
+    <div class="card">
+        <div class="card-header">
+            <h3 class="card-title">
+                <span class="card-title-icon">⚙️</span>
+                System Status
+            </h3>
+        </div>
+        <div class="card-body">
+            <div class="flex justify-between items-center" style="padding: var(--space-3) 0; border-bottom: 1px solid var(--color-surface-border);">
+                <span style="color: var(--color-text-secondary);">Database</span>
+                <span class="badge badge-success">Connected</span>
+            </div>
+            
+            <div class="flex justify-between items-center" style="padding: var(--space-3) 0; border-bottom: 1px solid var(--color-surface-border);">
+                <span style="color: var(--color-text-secondary);">Backend API</span>
+                <span class="badge badge-neutral" id="api-status">Checking...</span>
+            </div>
+            
+            <div class="flex justify-between items-center" style="padding: var(--space-3) 0; border-bottom: 1px solid var(--color-surface-border);">
+                <span style="color: var(--color-text-secondary);">WebSocket</span>
+                <span class="badge badge-neutral" id="ws-status">Not Connected</span>
+            </div>
+            
+            <div class="flex justify-between items-center" style="padding: var(--space-3) 0;">
+                <span style="color: var(--color-text-secondary);">ML Model</span>
+                <span class="badge badge-info">Enabled</span>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Keyboard Shortcuts -->
+    <div class="card">
+        <div class="card-header">
+            <h3 class="card-title">
+                <span class="card-title-icon">⌨️</span>
+                Keyboard Shortcuts
+            </h3>
+        </div>
+        <div class="card-body">
+            <div class="flex justify-between items-center" style="padding: var(--space-2) 0;">
+                <span style="color: var(--color-text-secondary);">Dashboard</span>
+                <kbd style="background: var(--color-bg-secondary); padding: var(--space-1) var(--space-2); border-radius: var(--radius-sm); font-family: var(--font-family-mono); font-size: var(--font-size-sm);">D</kbd>
+            </div>
+            <div class="flex justify-between items-center" style="padding: var(--space-2) 0;">
+                <span style="color: var(--color-text-secondary);">Positions</span>
+                <kbd style="background: var(--color-bg-secondary); padding: var(--space-1) var(--space-2); border-radius: var(--radius-sm); font-family: var(--font-family-mono); font-size: var(--font-size-sm);">P</kbd>
+            </div>
+            <div class="flex justify-between items-center" style="padding: var(--space-2) 0;">
+                <span style="color: var(--color-text-secondary);">Chart</span>
+                <kbd style="background: var(--color-bg-secondary); padding: var(--space-1) var(--space-2); border-radius: var(--radius-sm); font-family: var(--font-family-mono); font-size: var(--font-size-sm);">C</kbd>
+            </div>
+            <div class="flex justify-between items-center" style="padding: var(--space-2) 0;">
+                <span style="color: var(--color-text-secondary);">Trading Log</span>
+                <kbd style="background: var(--color-bg-secondary); padding: var(--space-1) var(--space-2); border-radius: var(--radius-sm); font-family: var(--font-family-mono); font-size: var(--font-size-sm);">T</kbd>
+            </div>
+            <div class="flex justify-between items-center" style="padding: var(--space-2) 0;">
+                <span style="color: var(--color-text-secondary);">Search Symbol</span>
+                <kbd style="background: var(--color-bg-secondary); padding: var(--space-1) var(--space-2); border-radius: var(--radius-sm); font-family: var(--font-family-mono); font-size: var(--font-size-sm);">/</kbd>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Theme toggle preview
+    const themeSelect = document.getElementById('theme-select');
+    if (themeSelect) {
+        themeSelect.addEventListener('change', (e) => {
+            const theme = e.target.value;
+            if (theme === 'light') {
+                document.documentElement.setAttribute('data-theme', 'light');
+            } else {
+                document.documentElement.removeAttribute('data-theme');
+            }
+        });
+    }
+    
+    // Check API status
+    fetch('/api/balance/')
+        .then(res => {
+            document.getElementById('api-status').textContent = res.ok ? 'Online' : 'Error';
+            document.getElementById('api-status').className = res.ok ? 'badge badge-success' : 'badge badge-danger';
+        })
+        .catch(() => {
+            document.getElementById('api-status').textContent = 'Offline';
+            document.getElementById('api-status').className = 'badge badge-danger';
+        });
+</script>
+{% endblock %}

@@ -10,6 +10,84 @@ from django.core.cache import cache
 
 logger = logging.getLogger(__name__)
 
+
+def _get_balance_payload():
+    """Build JSON payload for /api/balance/ (used by real-time updater)."""
+    try:
+        from trading_app.db_adapter import get_db_adapter
+        db = get_db_adapter()
+    except Exception as e:
+        logger.warning('balance_api: db adapter unavailable: %s', e)
+        return {
+            'position_count': 0,
+            'total_positions_value_usd': 0,
+            'total_unrealized_pnl_krw': 0,
+            'realized_pnl_krw': 0,
+            'ending_balance_krw': None,
+        }
+
+    positions = db.get_current_positions()
+    daily_pnl = db.get_daily_pnl()
+
+    total_value_usd = sum(
+        (p.get('current_price_usd') or p.get('avg_price_usd') or 0) * (p.get('quantity') or 0)
+        for p in positions
+    )
+    total_unrealized_krw = sum((p.get('unrealized_pnl_krw') or 0) for p in positions)
+    realized_krw = (daily_pnl.get('realized_pnl_krw') or 0) if daily_pnl else 0
+    ending_balance = (daily_pnl.get('ending_balance_krw') if daily_pnl else None)
+
+    return {
+        'position_count': len(positions),
+        'total_positions_value_usd': round(total_value_usd, 2),
+        'total_unrealized_pnl_krw': round(total_unrealized_krw, 0),
+        'realized_pnl_krw': round(realized_krw, 0),
+        'ending_balance_krw': round(ending_balance, 0) if ending_balance is not None else None,
+    }
+
+
+@require_GET
+def balance_api(request):
+    """
+    GET /api/balance/
+
+    Returns summary for real-time dashboard updates.
+    """
+    try:
+        data = _get_balance_payload()
+        return JsonResponse(data)
+    except Exception as e:
+        logger.exception('balance_api error')
+        return JsonResponse(
+            {
+                'position_count': 0,
+                'total_positions_value_usd': 0,
+                'total_unrealized_pnl_krw': 0,
+                'realized_pnl_krw': 0,
+                'ending_balance_krw': None,
+                'error': str(e),
+            },
+            status=500,
+        )
+
+
+@require_GET
+def positions_api(request):
+    """
+    GET /api/positions/
+
+    Returns list of current positions for real-time updates.
+    """
+    try:
+        from trading_app.db_adapter import get_db_adapter
+        db = get_db_adapter()
+        positions = db.get_current_positions()
+        return JsonResponse({'positions': positions})
+    except Exception as e:
+        logger.exception('positions_api error')
+        return JsonResponse({'positions': [], 'error': str(e)}, status=500)
+
+
 # Allowed for validation
 ALLOWED_PERIODS = {'1d', '5d', '1mo', '3mo', '6mo', '1y', '2y', '5y', '10y', 'ytd', 'max'}
 ALLOWED_INTERVALS = {'1m', '2m', '5m', '15m', '30m', '60m', '90m', '1h', '1d', '5d', '1wk', '1mo', '3mo'}
@@ -55,23 +133,28 @@ def _build_chart_response(symbol: str, period: str, interval: str) -> dict:
     if hist.empty:
         return {'error': 'No valid OHLC data after cleaning.'}
 
-    # EMA 12, 26 and SMA 200 (match strategy.py)
-    hist['EMA_12'] = hist['Close'].ewm(span=12, adjust=False).mean()
-    hist['EMA_26'] = hist['Close'].ewm(span=26, adjust=False).mean()
+    # === Price Chart Overlays: EMA 12 (short) and EMA 26 (long) ===
+    hist['EMA_short'] = hist['Close'].ewm(span=12, adjust=False).mean()  # EMA 12
+    hist['EMA_long'] = hist['Close'].ewm(span=26, adjust=False).mean()   # EMA 26
+
+    # === Indicator Pane: SMA 50 and SMA 200 ===
+    hist['SMA_50'] = hist['Close'].rolling(window=50).mean()
     hist['SMA_200'] = hist['Close'].rolling(window=200).mean()
-    # MACD line for buy signal: EMA12 - EMA26; cross above zero
-    hist['MACD'] = hist['EMA_12'] - hist['EMA_26']
+
+    # MACD line for buy signal: EMA_short - EMA_long; cross above zero
+    hist['MACD'] = hist['EMA_short'] - hist['EMA_long']
     hist['MACD_prev'] = hist['MACD'].shift(1)
     hist['MACD_cross_above_zero'] = (hist['MACD_prev'] <= 0) & (hist['MACD'] > 0)
 
     candlestick_data = []
-    ema12_data = []
-    ema26_data = []
-    sma200_data = []
+    ema_short_data = []  # EMA 12
+    ema_long_data = []   # EMA 26
+    sma50_data = []      # SMA 50
+    sma200_data = []     # SMA 200
     markers_data = []
 
     for ts, row in hist.iterrows():
-        # LightweightCharts: time as 'YYYY-MM-DD' for daily; for intraday can use 'YYYY-MM-DD' or ISO
+        # LightweightCharts: time as 'YYYY-MM-DD' for daily; for intraday use ISO
         if hasattr(ts, 'strftime'):
             t_str = ts.strftime('%Y-%m-%d') if interval in ('1d', '5d', '1wk', '1mo', '3mo') else ts.isoformat()
         else:
@@ -80,13 +163,19 @@ def _build_chart_response(symbol: str, period: str, interval: str) -> dict:
         o, h, l, c = float(row['Open']), float(row['High']), float(row['Low']), float(row['Close'])
         candlestick_data.append({'time': t_str, 'open': o, 'high': h, 'low': l, 'close': c})
 
-        if pd.notna(row.get('EMA_12')):
-            ema12_data.append({'time': t_str, 'value': float(row['EMA_12'])})
-        if pd.notna(row.get('EMA_26')):
-            ema26_data.append({'time': t_str, 'value': float(row['EMA_26'])})
+        # EMA overlays (Price Chart)
+        if pd.notna(row.get('EMA_short')):
+            ema_short_data.append({'time': t_str, 'value': float(row['EMA_short'])})
+        if pd.notna(row.get('EMA_long')):
+            ema_long_data.append({'time': t_str, 'value': float(row['EMA_long'])})
+
+        # SMA indicators (Indicator Pane)
+        if pd.notna(row.get('SMA_50')):
+            sma50_data.append({'time': t_str, 'value': float(row['SMA_50'])})
         if pd.notna(row.get('SMA_200')):
             sma200_data.append({'time': t_str, 'value': float(row['SMA_200'])})
 
+        # Buy markers
         if row.get('MACD_cross_above_zero') and pd.notna(row.get('MACD_cross_above_zero')):
             markers_data.append({
                 'time': t_str,
@@ -98,9 +187,12 @@ def _build_chart_response(symbol: str, period: str, interval: str) -> dict:
 
     return {
         'candlestick_data': candlestick_data,
-        'ema12_data': ema12_data,
-        'ema26_data': ema26_data,
-        'sma200_data': sma200_data,
+        # Price Chart overlays (EMA)
+        'ema_short_data': ema_short_data,  # EMA 12
+        'ema_long_data': ema_long_data,    # EMA 26
+        # Indicator Pane (SMA)
+        'sma50_data': sma50_data,          # SMA 50
+        'sma200_data': sma200_data,        # SMA 200
         'markers_data': markers_data,
         'symbol': symbol,
         'period': period,
@@ -115,7 +207,8 @@ def chart_data_api(request):
 
     Returns JSON for TradingView Lightweight Charts:
     - candlestick_data: [{ time, open, high, low, close }]
-    - ema12_data, ema26_data, sma200_data: [{ time, value }]
+    - ema_short_data (EMA 12), ema_long_data (EMA 26): for Price Chart overlay
+    - sma50_data (SMA 50), sma200_data (SMA 200): for Indicator Pane
     - markers_data: [{ time, position, color, shape, text }] (buy signals)
     """
     symbol = (request.GET.get('symbol') or 'AAPL').strip().upper()

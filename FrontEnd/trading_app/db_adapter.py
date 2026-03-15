@@ -241,7 +241,7 @@ class TradingDatabaseAdapter:
             start_date = date.today() - timedelta(days=days)
             daily_pnls = session.query(DailyPnL).filter(
                 DailyPnL.date >= start_date
-            ).order_by(DailyPnL.date.desc()).all()
+            ).order_by(DailyPnL.date.asc()).all()
             
             return [{
                 'date': pnl.date,

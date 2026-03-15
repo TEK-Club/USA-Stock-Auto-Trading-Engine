@@ -1,94 +1,205 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Trading Dashboard{% endblock %} - AT vol.2</title>
     
-    <!-- Bootstrap CSS -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    
     <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    
     {% load static %}
     <!-- Custom CSS -->
+    <link rel="stylesheet" href="{% static 'css/design-tokens.css' %}">
     <link rel="stylesheet" href="{% static 'css/style.css' %}">
     
     {% block extra_css %}{% endblock %}
 </head>
 <body>
-    <!-- Navigation -->
-    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
-        <div class="container-fluid">
-            <a class="navbar-brand" href="{% url 'trading_app:dashboard' %}">
-                🚀 AT vol.2 Trading System
-            </a>
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
-                <span class="navbar-toggler-icon"></span>
-            </button>
-            <div class="collapse navbar-collapse" id="navbarNav">
-                <ul class="navbar-nav me-auto">
-                    <li class="nav-item">
-                        <a class="nav-link" href="{% url 'trading_app:dashboard' %}">Dashboard</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="{% url 'trading_app:trading_log' %}">Trading Log</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="{% url 'trading_app:positions' %}">Positions</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="{% url 'trading_app:performance' %}">Performance</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="{% url 'trading_app:risk_dashboard' %}">Risk</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="{% url 'trading_app:market_status' %}">Market Status</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="{% url 'trading_app:ml_insights' %}">ML Insights</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="{% url 'trading_app:chart' %}">Chart</a>
-                    </li>
-                </ul>
-                <ul class="navbar-nav">
-                    <li class="nav-item">
-                        <span class="navbar-text text-light me-3">User: {{ user.username }}</span>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="{% url 'logout' %}">Logout</a>
-                    </li>
-                </ul>
-            </div>
-        </div>
-    </nav>
-
-    <!-- Main Content -->
-    <div class="container-fluid mt-4">
-        {% if messages %}
-            {% for message in messages %}
-                <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
-                    {{ message }}
-                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    <div class="app-layout">
+        <!-- Sidebar -->
+        {% include 'trading_app/components/sidebar.html' %}
+        
+        <!-- Main Content -->
+        <main class="main-content" id="main-content">
+            <!-- Header -->
+            <header class="main-header">
+                <div class="header-left">
+                    <button class="btn btn-ghost btn-icon" id="mobile-menu-toggle" aria-label="Toggle menu">
+                        <span>☰</span>
+                    </button>
+                    <div>
+                        <h1 class="header-title">{% block page_title %}Dashboard{% endblock %}</h1>
+                        <nav class="header-breadcrumb">
+                            <a href="{% url 'trading_app:dashboard' %}">Home</a>
+                            {% block breadcrumb %}{% endblock %}
+                        </nav>
+                    </div>
                 </div>
-            {% endfor %}
-        {% endif %}
+                <div class="header-right">
+                    <div class="header-search">
+                        <span class="header-search-icon">🔍</span>
+                        <input type="text" placeholder="Search symbols..." id="symbol-search" autocomplete="off">
+                    </div>
+                    
+                    <!-- Notification Bell -->
+                    <div class="notification-bell" id="notification-bell">
+                        <button class="btn btn-ghost btn-icon" id="notification-toggle">
+                            <span>🔔</span>
+                            <span class="notification-badge" id="notification-count" style="display: none;">0</span>
+                        </button>
+                        <div class="notification-dropdown" id="notification-dropdown" style="display: none;">
+                            <div class="notification-header">
+                                <span style="font-weight: 600;">Notifications</span>
+                                <button class="btn btn-ghost btn-sm" id="clear-notifications">Clear all</button>
+                            </div>
+                            <div class="notification-list" id="notification-list">
+                                <div style="padding: var(--space-8); text-align: center; color: var(--color-text-muted);">
+                                    No notifications
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- User Menu -->
+                    <div class="user-menu">
+                        <span style="color: var(--color-text-secondary); font-size: var(--font-size-sm);">
+                            {{ user.username|default:"Guest" }}
+                        </span>
+                        <a href="{% url 'logout' %}" class="btn btn-ghost btn-sm">Logout</a>
+                    </div>
+                </div>
+            </header>
+            
+            <!-- Content Area -->
+            <div class="content-area">
+                <!-- Toast Container -->
+                <div class="toast-container" id="toast-container"></div>
+                
+                <!-- Flash Messages -->
+                {% if messages %}
+                    {% for message in messages %}
+                        <div class="toast toast-{{ message.tags }}" style="position: relative; animation: none; margin-bottom: var(--space-4);">
+                            <span class="toast-icon">
+                                {% if message.tags == 'success' %}✓{% elif message.tags == 'error' %}✕{% elif message.tags == 'warning' %}⚠{% else %}ℹ{% endif %}
+                            </span>
+                            <div class="toast-content">
+                                <div class="toast-message">{{ message }}</div>
+                            </div>
+                            <button class="toast-close" onclick="this.parentElement.remove()">✕</button>
+                        </div>
+                    {% endfor %}
+                {% endif %}
 
-        {% if error %}
-            <div class="alert alert-danger alert-dismissible fade show" role="alert">
-                <strong>Error:</strong> {{ error }}
-                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                {% if error %}
+                    <div class="toast toast-error" style="position: relative; animation: none; margin-bottom: var(--space-4);">
+                        <span class="toast-icon">✕</span>
+                        <div class="toast-content">
+                            <div class="toast-title">Error</div>
+                            <div class="toast-message">{{ error }}</div>
+                        </div>
+                        <button class="toast-close" onclick="this.parentElement.remove()">✕</button>
+                    </div>
+                {% endif %}
+
+                {% block content %}{% endblock %}
             </div>
-        {% endif %}
-
-        {% block content %}{% endblock %}
+        </main>
     </div>
 
-    <!-- Bootstrap JS -->
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <!-- Custom JS -->
     <script src="{% static 'js/main.js' %}"></script>
+    <script src="{% static 'js/websocket.js' %}"></script>
+    
+    <script>
+        // Sidebar toggle
+        const sidebar = document.getElementById('sidebar');
+        const sidebarToggle = document.getElementById('sidebar-toggle');
+        const sidebarOverlay = document.getElementById('sidebar-overlay');
+        const mainContent = document.getElementById('main-content');
+        const mobileMenuToggle = document.getElementById('mobile-menu-toggle');
+        
+        // Desktop collapse
+        if (sidebarToggle) {
+            sidebarToggle.addEventListener('click', () => {
+                sidebar.classList.toggle('collapsed');
+                mainContent.classList.toggle('sidebar-collapsed');
+                localStorage.setItem('sidebarCollapsed', sidebar.classList.contains('collapsed'));
+            });
+        }
+        
+        // Mobile open/close
+        if (mobileMenuToggle) {
+            mobileMenuToggle.addEventListener('click', () => {
+                sidebar.classList.toggle('open');
+            });
+        }
+        
+        if (sidebarOverlay) {
+            sidebarOverlay.addEventListener('click', () => {
+                sidebar.classList.remove('open');
+            });
+        }
+        
+        // Restore sidebar state
+        if (localStorage.getItem('sidebarCollapsed') === 'true') {
+            sidebar.classList.add('collapsed');
+            mainContent.classList.add('sidebar-collapsed');
+        }
+        
+        // Notification dropdown
+        const notificationToggle = document.getElementById('notification-toggle');
+        const notificationDropdown = document.getElementById('notification-dropdown');
+        
+        if (notificationToggle && notificationDropdown) {
+            notificationToggle.addEventListener('click', (e) => {
+                e.stopPropagation();
+                notificationDropdown.style.display = 
+                    notificationDropdown.style.display === 'none' ? 'block' : 'none';
+            });
+            
+            document.addEventListener('click', (e) => {
+                if (!notificationDropdown.contains(e.target)) {
+                    notificationDropdown.style.display = 'none';
+                }
+            });
+        }
+        
+        // Symbol search
+        const symbolSearch = document.getElementById('symbol-search');
+        if (symbolSearch) {
+            symbolSearch.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    const symbol = e.target.value.trim().toUpperCase();
+                    if (symbol) {
+                        window.location.href = `{% url 'trading_app:chart' %}?symbol=${symbol}`;
+                    }
+                }
+            });
+        }
+        
+        // Keyboard shortcuts
+        document.addEventListener('keydown', (e) => {
+            // Only trigger if not typing in an input
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+            
+            switch(e.key.toLowerCase()) {
+                case 'd': window.location.href = "{% url 'trading_app:dashboard' %}"; break;
+                case 'p': window.location.href = "{% url 'trading_app:positions' %}"; break;
+                case 'c': window.location.href = "{% url 'trading_app:chart' %}"; break;
+                case 't': window.location.href = "{% url 'trading_app:trading_log' %}"; break;
+                case '/': 
+                    e.preventDefault();
+                    symbolSearch?.focus();
+                    break;
+            }
+        });
+    </script>
     
     {% block extra_js %}{% endblock %}
 </body>

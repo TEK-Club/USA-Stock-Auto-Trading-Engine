@@ -26,7 +26,7 @@ class DisplayConfig(BaseModel):
 
 
 class StrategyConfig(BaseModel):
-    """Hybrid MACD/RSI/ATR strategy: SMA 50/200, EMA 12/26, long-only."""
+    """Hybrid MACD/RSI/ATR strategy: SMA 50/200, EMA 12/26, long-only. Optional dip-buy mode."""
     sma_50: int = 50
     sma_200: int = 200
     ema_fast: int = 12
@@ -38,6 +38,12 @@ class StrategyConfig(BaseModel):
     rsi_oversold: int = 30
     rsi_overbought: int = 70
     atr_period: int = 14
+    # Dip buying: use S&P 500 (index) + stock's own SMA to define bearish; buy oversold pullbacks.
+    dip_buy_enabled: bool = False
+    index_symbol: str = "SPY"  # S&P 500 ETF for market regime
+    index_sma_period: int = 200  # market bearish when index close < index SMA
+    dip_rsi_max: int = 35  # RSI must be below this to consider dip buy
+    dip_require_above_sma200: bool = True  # only dip-buy when stock still above its SMA 200
 
     @field_validator('sma_200')
     @classmethod

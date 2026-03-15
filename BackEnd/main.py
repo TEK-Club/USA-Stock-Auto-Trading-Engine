@@ -9,6 +9,7 @@ import logging
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
+import pandas as pd
 
 # Add project root to path
 PROJECT_ROOT = Path(__file__).parent
@@ -273,13 +274,48 @@ class USAAutoTrader:
                            f"{result.discrepancies_found} discrepancies")
         else:
             self.logger.warning(f"Recovery had errors: {result.errors}")
+
+    def _get_market_regime(self) -> tuple[Optional[bool], str]:
+        """
+        Compute market regime from index (e.g. SPY or ^GSPC): (True, symbol) = bearish, (False, symbol) = bullish.
+        Returns (None, symbol) if index data unavailable. Tries configured symbol then ^GSPC fallback.
+        """
+        idx_sym = getattr(self.strategy, 'index_symbol', 'SPY')
+        period = getattr(self.strategy, 'index_sma_period', 200)
+        # Try configured symbol first, then S&P 500 index ticker (often more reliable than SPY in some regions)
+        symbols_to_try = [idx_sym, "^GSPC"] if idx_sym != "^GSPC" else ["^GSPC"]
+        # Request 2y so we have enough bars for 200-day SMA even with holidays
+        period_str = "2y" if period >= 200 else "1y"
+        for sym in symbols_to_try:
+            try:
+                index_df = self.kis_api.get_historical_data(sym, period=period_str, interval='1d')
+                if index_df is None or index_df.empty:
+                    continue
+                # Handle both 'Close' and 'close' (yfinance column casing can vary)
+                close_col = 'Close' if 'Close' in index_df.columns else 'close'
+                if close_col not in index_df.columns:
+                    continue
+                close = index_df[close_col]
+                if len(close) < period:
+                    continue
+                sma = close.rolling(window=period).mean().iloc[-1]
+                last_close = close.iloc[-1]
+                if pd.isna(sma) or pd.isna(last_close) or sma <= 0:
+                    continue
+                return (bool(last_close < sma), sym)
+            except Exception as e:
+                self.logger.debug(f"Market regime check failed for {sym}: {e}")
+                continue
+        self.logger.debug("Market regime: no index data (tried %s)", ", ".join(symbols_to_try))
+        return None, idx_sym
     
-    def process_symbol(self, symbol: str) -> None:
+    def process_symbol(self, symbol: str, market_bearish: Optional[bool] = None) -> None:
         """
         Process a single symbol - fetch data, analyze, and trade if signal.
         
         Args:
             symbol: Stock symbol to process
+            market_bearish: If dip-buy enabled, True when index (e.g. SPY) is below its SMA
         """
         try:
             # Check circuit breaker
@@ -317,8 +353,10 @@ class USAAutoTrader:
                 }
                 self.logger.debug(f"{symbol}: Existing position detected ({current_position.quantity} shares @ ${current_position.avg_price:.2f})")
             
-            # Generate signal (ML-enhanced if enabled)
-            signal = self.strategy.generate_signal(hist_data, symbol, position_dict)
+            # Generate signal (ML-enhanced if enabled); pass market regime for dip buying
+            signal = self.strategy.generate_signal(
+                hist_data, symbol, position_dict, market_bearish=market_bearish
+            )
             
             # Log signal with ML info if available
             if hasattr(signal, 'ml_enabled') and signal.ml_enabled:
@@ -471,6 +509,15 @@ class USAAutoTrader:
             if order.status.value == 'filled' and order.avg_fill_price:
                 pnl = (order.avg_fill_price - position.avg_price) * position.quantity
                 self.circuit_breaker.record_trade_result(pnl > 0, pnl)
+                
+                # Record realized P&L to database for daily tracking
+                if self.database:
+                    try:
+                        exchange_rate = self.exchange_rate_tracker.get_rate()
+                        pnl_krw = pnl * exchange_rate
+                        self.database.update_daily_pnl(realized_pnl_krw=pnl_krw, win=(pnl > 0))
+                    except Exception as e:
+                        self.logger.warning(f"Failed to record daily P&L: {e}")
                 
                 # Record trade outcome for ML training
                 if hasattr(self.strategy, 'record_trade_end') and hasattr(position, 'entry_order_id'):
@@ -647,12 +694,23 @@ class USAAutoTrader:
                     time.sleep(max(10, sleep_time))
                     continue
                 
+                # Compute market regime (index vs its SMA) for logging and dip-buy strategy
+                market_bearish, index_symbol = self._get_market_regime()
+                if market_bearish is True:
+                    self.logger.info("Market regime: bearish (%s below SMA)", index_symbol)
+                elif market_bearish is False:
+                    self.logger.info("Market regime: bullish (%s at or above SMA)", index_symbol)
+                else:
+                    self.logger.info("Market regime: N/A (%s data unavailable)", index_symbol)
+                # Pass to strategy only when dip-buy is enabled
+                regime_for_strategy = market_bearish if getattr(self.strategy, 'dip_buy_enabled', False) else None
+
                 # Process each symbol
                 for symbol in self.config.symbols:
                     if should_stop():
                         break
                     
-                    self.process_symbol(symbol)
+                    self.process_symbol(symbol, market_bearish=regime_for_strategy)
                     
                     # Small delay between symbols to respect rate limits
                     time.sleep(0.5)

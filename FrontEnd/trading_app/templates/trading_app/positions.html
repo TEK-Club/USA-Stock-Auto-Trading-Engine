@@ -1,85 +1,217 @@
 {% extends 'trading_app/base.html' %}
+{% load static %}
 
 {% block title %}Positions{% endblock %}
 
+{% block page_title %}Positions{% endblock %}
+
+{% block breadcrumb %}
+<span>/</span>
+<span>Positions</span>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .sparkline-cell {
+        padding: var(--space-2) var(--space-3) !important;
+    }
+    .sparkline {
+        display: block;
+        width: 100px;
+        height: 30px;
+        transition: opacity var(--transition-fast);
+    }
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="row mb-4">
-    <div class="col-md-4">
-        <div class="card text-white bg-info">
-            <div class="card-body">
-                <h5 class="card-title">Total Positions</h5>
-                <h2 class="card-text">{{ position_count }}</h2>
-            </div>
+<!-- Stats Cards -->
+<div class="grid grid-cols-3" style="margin-bottom: var(--space-6);">
+    <div class="card stat-card info">
+        <div class="card-body">
+            <div class="stat-label">Total Positions</div>
+            <div class="stat-value" id="position-count">{{ position_count }}</div>
         </div>
     </div>
-    <div class="col-md-4">
-        <div class="card text-white bg-primary">
-            <div class="card-body">
-                <h5 class="card-title">Total Value</h5>
-                <h2 class="card-text">${{ total_value_usd|floatformat:2 }}</h2>
-            </div>
+    
+    <div class="card stat-card">
+        <div class="card-body">
+            <div class="stat-label">Total Value</div>
+            <div class="stat-value font-mono" id="total-value">${{ total_value_usd|floatformat:2 }}</div>
         </div>
     </div>
-    <div class="col-md-4">
-        <div class="card text-white {% if total_unrealized_pnl_krw >= 0 %}bg-success{% else %}bg-danger{% endif %}">
-            <div class="card-body">
-                <h5 class="card-title">Total Unrealized P&L</h5>
-                <h2 class="card-text">
-                    {{ total_unrealized_pnl_krw|floatformat:0 }} KRW
-                </h2>
-                <small>${{ total_unrealized_pnl_usd|floatformat:2 }}</small>
+    
+    <div class="card stat-card {% if total_unrealized_pnl_krw >= 0 %}{% else %}danger{% endif %}">
+        <div class="card-body">
+            <div class="stat-label">Total Unrealized P&L</div>
+            <div class="stat-value font-mono {% if total_unrealized_pnl_krw >= 0 %}positive{% else %}negative{% endif %}" id="total-pnl">
+                {% if total_unrealized_pnl_krw >= 0 %}+{% endif %}₩{{ total_unrealized_pnl_krw|floatformat:0 }}
+            </div>
+            <div style="font-size: var(--font-size-sm); color: var(--color-text-secondary);" class="mono" id="total-pnl-usd">
+                ${{ total_unrealized_pnl_usd|floatformat:2 }}
             </div>
         </div>
     </div>
 </div>
 
+<!-- Positions Table -->
 <div class="card">
     <div class="card-header">
-        <h5>Current Positions</h5>
+        <h3 class="card-title">
+            <span class="card-title-icon">💼</span>
+            Current Positions
+        </h3>
+        <div class="flex gap-2">
+            <a href="{% url 'trading_app:export_positions' %}" class="btn btn-secondary btn-sm">
+                <span>📥</span>
+                Export CSV
+            </a>
+            <button class="btn btn-ghost btn-sm" onclick="refreshPositions()">
+                <span id="refresh-icon">🔄</span>
+                Refresh
+            </button>
+        </div>
     </div>
-    <div class="card-body">
+    <div class="card-body" style="padding: 0;">
         {% if positions %}
-            <div class="table-responsive">
-                <table class="table table-hover">
-                    <thead>
-                        <tr>
-                            <th>Symbol</th>
-                            <th>Quantity</th>
-                            <th>Avg Price (USD)</th>
-                            <th>Avg Price (KRW)</th>
-                            <th>Current Price (USD)</th>
-                            <th>Unrealized P&L (USD)</th>
-                            <th>Unrealized P&L (KRW)</th>
-                            <th>Stop Loss</th>
-                            <th>Take Profit</th>
-                            <th>Opened At</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for pos in positions %}
-                        <tr>
-                            <td><strong>{{ pos.symbol }}</strong></td>
-                            <td>{{ pos.quantity }}</td>
-                            <td>${{ pos.avg_price_usd|floatformat:2 }}</td>
-                            <td>{{ pos.avg_price_krw|floatformat:0 }} KRW</td>
-                            <td>${{ pos.current_price_usd|floatformat:2|default:"N/A" }}</td>
-                            <td class="{% if pos.unrealized_pnl_usd >= 0 %}text-success{% else %}text-danger{% endif %}">
-                                ${{ pos.unrealized_pnl_usd|floatformat:2|default:"0.00" }}
-                            </td>
-                            <td class="{% if pos.unrealized_pnl_krw >= 0 %}text-success{% else %}text-danger{% endif %}">
-                                {{ pos.unrealized_pnl_krw|floatformat:0|default:"0" }} KRW
-                            </td>
-                            <td>${{ pos.stop_loss|floatformat:2|default:"N/A" }}</td>
-                            <td>${{ pos.take_profit|floatformat:2|default:"N/A" }}</td>
-                            <td>{{ pos.opened_at|date:"Y-m-d H:i" }}</td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
+        <div class="table-container">
+            <table class="table" id="positions-table">
+                <thead>
+                    <tr>
+                        <th class="sortable" data-sort="symbol">Symbol</th>
+                        <th>7D Trend</th>
+                        <th class="sortable text-right" data-sort="quantity">Quantity</th>
+                        <th class="text-right">Avg Price (USD)</th>
+                        <th class="text-right">Current Price</th>
+                        <th class="sortable text-right" data-sort="pnl_usd">P&L (USD)</th>
+                        <th class="sortable text-right" data-sort="pnl_krw">P&L (KRW)</th>
+                        <th class="text-right">Stop Loss</th>
+                        <th class="text-right">Take Profit</th>
+                        <th>Opened</th>
+                        <th class="text-center">Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="positions-body">
+                    {% for pos in positions %}
+                    <tr data-symbol="{{ pos.symbol }}">
+                        <td>
+                            <div class="flex items-center gap-2">
+                                <strong>{{ pos.symbol }}</strong>
+                            </div>
+                        </td>
+                        <td class="sparkline-cell">
+                            <canvas class="sparkline" data-sparkline="{{ pos.symbol }}"></canvas>
+                        </td>
+                        <td class="text-right mono">{{ pos.quantity }}</td>
+                        <td class="text-right mono">${{ pos.avg_price_usd|floatformat:2 }}</td>
+                        <td class="text-right mono current-price">${{ pos.current_price_usd|floatformat:2|default:"N/A" }}</td>
+                        <td class="text-right mono {% if pos.unrealized_pnl_usd >= 0 %}text-success{% else %}text-danger{% endif %} pnl-usd">
+                            {% if pos.unrealized_pnl_usd >= 0 %}+{% endif %}${{ pos.unrealized_pnl_usd|floatformat:2|default:"0.00" }}
+                        </td>
+                        <td class="text-right mono {% if pos.unrealized_pnl_krw >= 0 %}text-success{% else %}text-danger{% endif %} pnl-krw">
+                            {% if pos.unrealized_pnl_krw >= 0 %}+{% endif %}₩{{ pos.unrealized_pnl_krw|floatformat:0|default:"0" }}
+                        </td>
+                        <td class="text-right mono">${{ pos.stop_loss|floatformat:2|default:"—" }}</td>
+                        <td class="text-right mono">${{ pos.take_profit|floatformat:2|default:"—" }}</td>
+                        <td style="color: var(--color-text-secondary); font-size: var(--font-size-sm);">
+                            {{ pos.opened_at|date:"M d, H:i" }}
+                        </td>
+                        <td class="text-center">
+                            <div class="flex gap-1 justify-content-center">
+                                <a href="{% url 'trading_app:chart' %}?symbol={{ pos.symbol }}" class="btn btn-ghost btn-sm" title="View Chart">
+                                    📊
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
         {% else %}
-            <p class="text-muted text-center">No open positions</p>
+        <div style="padding: var(--space-12); text-align: center;">
+            <div style="font-size: 48px; margin-bottom: var(--space-4);">💼</div>
+            <h3 style="color: var(--color-text-secondary); margin-bottom: var(--space-2);">No Open Positions</h3>
+            <p style="color: var(--color-text-muted);">When you open positions, they will appear here.</p>
+        </div>
         {% endif %}
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'js/sparkline.js' %}"></script>
+<script>
+    // Refresh positions via AJAX
+    async function refreshPositions() {
+        const icon = document.getElementById('refresh-icon');
+        icon.style.animation = 'spin 1s linear infinite';
+        
+        try {
+            const response = await fetch('/api/balance/');
+            if (response.ok) {
+                // For now, just reload the page
+                // In a real implementation, we'd update the DOM directly
+                window.location.reload();
+            }
+        } catch (error) {
+            console.error('Failed to refresh positions:', error);
+        }
+        
+        icon.style.animation = '';
+    }
+    
+    // Sortable table headers
+    document.querySelectorAll('.table th.sortable').forEach(header => {
+        header.addEventListener('click', () => {
+            const sort = header.dataset.sort;
+            const table = header.closest('table');
+            const tbody = table.querySelector('tbody');
+            const rows = Array.from(tbody.querySelectorAll('tr'));
+            const isAsc = header.classList.contains('asc');
+            
+            // Remove sort classes from all headers
+            table.querySelectorAll('th.sortable').forEach(h => {
+                h.classList.remove('asc', 'desc');
+            });
+            
+            // Sort rows
+            rows.sort((a, b) => {
+                let aVal, bVal;
+                
+                switch(sort) {
+                    case 'symbol':
+                        aVal = a.dataset.symbol;
+                        bVal = b.dataset.symbol;
+                        break;
+                    case 'quantity':
+                        aVal = parseFloat(a.querySelector('td:nth-child(2)').textContent) || 0;
+                        bVal = parseFloat(b.querySelector('td:nth-child(2)').textContent) || 0;
+                        break;
+                    case 'pnl_usd':
+                        aVal = parseFloat(a.querySelector('.pnl-usd').textContent.replace(/[^0-9.-]/g, '')) || 0;
+                        bVal = parseFloat(b.querySelector('.pnl-usd').textContent.replace(/[^0-9.-]/g, '')) || 0;
+                        break;
+                    case 'pnl_krw':
+                        aVal = parseFloat(a.querySelector('.pnl-krw').textContent.replace(/[^0-9.-]/g, '')) || 0;
+                        bVal = parseFloat(b.querySelector('.pnl-krw').textContent.replace(/[^0-9.-]/g, '')) || 0;
+                        break;
+                    default:
+                        return 0;
+                }
+                
+                if (typeof aVal === 'string') {
+                    return isAsc ? bVal.localeCompare(aVal) : aVal.localeCompare(bVal);
+                }
+                return isAsc ? bVal - aVal : aVal - bVal;
+            });
+            
+            // Update sort indicator
+            header.classList.add(isAsc ? 'desc' : 'asc');
+            
+            // Reorder DOM
+            rows.forEach(row => tbody.appendChild(row));
+        });
+    });
+</script>
 {% endblock %}

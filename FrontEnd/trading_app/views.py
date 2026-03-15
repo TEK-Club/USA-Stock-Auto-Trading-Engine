@@ -4,10 +4,11 @@ Views for trading_app - Core and Enhanced features
 
 from django.shortcuts import render, redirect
 from django.contrib.auth.decorators import login_required
-from django.http import JsonResponse
+from django.http import JsonResponse, HttpResponse
 from django.db.models import Sum, Count, Q
 from datetime import datetime, date, timedelta
 from typing import Dict, Any
+import csv
 
 from .db_adapter import get_db_adapter
 
@@ -355,6 +356,125 @@ def chart(request):
         'period': period,
         'interval': interval,
     })
+
+
+@login_required
+def settings_page(request):
+    """Settings page for theme, preferences, and configuration status"""
+    if request.method == 'POST':
+        # Handle settings update
+        theme = request.POST.get('theme', 'dark')
+        currency = request.POST.get('currency', 'KRW')
+        timezone = request.POST.get('timezone', 'America/Denver')
+        
+        # Store in session (would ideally use user profile model)
+        request.session['theme'] = theme
+        request.session['currency'] = currency
+        request.session['timezone'] = timezone
+        
+        return redirect('trading_app:settings')
+    
+    # Get current settings from session
+    context = {
+        'theme': request.session.get('theme', 'dark'),
+        'currency': request.session.get('currency', 'KRW'),
+        'timezone': request.session.get('timezone', 'America/Denver'),
+        'themes': [
+            {'value': 'dark', 'label': 'Dark Mode'},
+            {'value': 'light', 'label': 'Light Mode'},
+            {'value': 'system', 'label': 'System Default'},
+        ],
+        'currencies': [
+            {'value': 'KRW', 'label': 'Korean Won (KRW)'},
+            {'value': 'USD', 'label': 'US Dollar (USD)'},
+        ],
+        'timezones': [
+            {'value': 'America/Denver', 'label': 'Mountain Time (MT)'},
+            {'value': 'America/New_York', 'label': 'Eastern Time (ET)'},
+            {'value': 'America/Los_Angeles', 'label': 'Pacific Time (PT)'},
+            {'value': 'Asia/Seoul', 'label': 'Korea Standard Time (KST)'},
+            {'value': 'UTC', 'label': 'UTC'},
+        ],
+    }
+    
+    return render(request, 'trading_app/settings.html', context)
+
+
+@login_required
+def export_trades_csv(request):
+    """Export trades to CSV"""
+    db = get_db_adapter()
+    
+    # Get date range from query params
+    days = int(request.GET.get('days', 30))
+    
+    try:
+        trades = db.get_recent_trades(limit=10000)
+        
+        # Create response
+        response = HttpResponse(content_type='text/csv')
+        response['Content-Disposition'] = f'attachment; filename="trades_{date.today().isoformat()}.csv"'
+        
+        writer = csv.writer(response)
+        writer.writerow([
+            'Date', 'Symbol', 'Side', 'Quantity', 'Price (USD)', 
+            'Price (KRW)', 'Total (USD)', 'Total (KRW)', 'Order ID'
+        ])
+        
+        for trade in trades:
+            writer.writerow([
+                trade.get('executed_at', ''),
+                trade.get('symbol', ''),
+                trade.get('side', ''),
+                trade.get('quantity', 0),
+                trade.get('price_usd', 0),
+                trade.get('price_krw', 0),
+                trade.get('total_usd', 0),
+                trade.get('total_krw', 0),
+                trade.get('order_id', ''),
+            ])
+        
+        return response
+    
+    except Exception as e:
+        return HttpResponse(f'Error exporting trades: {e}', status=500)
+
+
+@login_required
+def export_positions_csv(request):
+    """Export current positions to CSV"""
+    db = get_db_adapter()
+    
+    try:
+        positions = db.get_current_positions()
+        
+        # Create response
+        response = HttpResponse(content_type='text/csv')
+        response['Content-Disposition'] = f'attachment; filename="positions_{date.today().isoformat()}.csv"'
+        
+        writer = csv.writer(response)
+        writer.writerow([
+            'Symbol', 'Quantity', 'Avg Price (USD)', 'Current Price (USD)',
+            'Unrealized P&L (USD)', 'Unrealized P&L (KRW)', 
+            'Stop Loss', 'Take Profit'
+        ])
+        
+        for pos in positions:
+            writer.writerow([
+                pos.get('symbol', ''),
+                pos.get('quantity', 0),
+                pos.get('avg_price_usd', 0),
+                pos.get('current_price_usd', 0),
+                pos.get('unrealized_pnl_usd', 0),
+                pos.get('unrealized_pnl_krw', 0),
+                pos.get('stop_loss', ''),
+                pos.get('take_profit', ''),
+            ])
+        
+        return response
+    
+    except Exception as e:
+        return HttpResponse(f'Error exporting positions: {e}', status=500)
 
 
 # API endpoints for AJAX updates

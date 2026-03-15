@@ -22,17 +22,19 @@ symbols:
   - AAPL
   - MSFT
   - GOOGL
-  - NVDA
   - AMZN
   - TSLA
+  - META
 
+# Leisure
+  - NCLH
+  
 # Space
   - RKLB
 
 # Drone
   - AVAV
   - KTOS
-  - JOBY
 
 # Shipbuilding
   - HII
@@ -42,7 +44,6 @@ symbols:
   - GE
   - LHX
   - NOC
-  - ITA
 
 # Bitcoin/Stablecoin
   - COIN
@@ -63,26 +64,43 @@ symbols:
   - INTC
   - LRCX
   - KLAC
+  - MRVL
+  - ASML
+  - TER
+  - GLW
 
 # Energy
   - SMR
   - BE
 
+  # AI Infrastructure
+  - CAT
+  - URI
+  - ETN
+  - PWR
+  - GEV
+  - JCI
+  - FIX
+
 # ETF
-#  - WGMI
-#  - URA
-#  - SLV
-#  - ARKX
-#  - REMX
-#  - SHLD
-#  - XME
-#  - SIL
-#  - BLOK
-#  - OIH
+  - WGMI
+  - URA
+  - SLV
+  - ARKK
+  - REMX
+  - SHLD
+  - XME
+  - SIL
+  - BLOK
+  - OIH
+  - PAVE
+  - GRID
+  - ITA
 
 # ===== STRATEGY =====
 # Hybrid MACD/RSI/ATR: SMA 50/200, EMA 12/26, long-only.
 # Entry: Price > SMA 200, EMA12 cross above EMA26 (MACD>0), RSI<70, SMA50 up or Price>SMA50.
+# Option B - Dip buying: when market (S&P 500) or stock is bearish/sideways, buy oversold pullbacks.
 # Exit: trailing ATR stop (2×ATR), take-profit 1.5:1 or 2:1 R:R.
 strategy:
   sma_50: 50
@@ -96,6 +114,12 @@ strategy:
   rsi_oversold: 30
   rsi_overbought: 70
   atr_period: 14
+  # Dip buying (option B): S&P 500 for market regime + stock SMA for dip definition (tech-heavy list).
+  dip_buy_enabled: true
+  index_symbol: SPY
+  index_sma_period: 200
+  dip_rsi_max: 35
+  dip_require_above_sma200: true
 
 # ===== RISK =====
 risk:
@@ -106,7 +130,7 @@ risk:
   risk_reward_ratio: 2.0          # 1.5:1 or 2:1 for take-profit vs ATR stop
   max_total_exposure_percent: 80
   max_drawdown_percent: 15
-  max_correlated_positions: 3
+  max_correlated_positions: 6
 
 # ===== CIRCUIT BREAKER =====
 circuit_breaker:
@@ -179,9 +203,9 @@ exchange_rate:
 
 # ===== DATA VALIDATION =====
 data_validation:
-  # For daily data: set high to cover weekends (72+ hours)
+  # For daily data: set high to cover long weekends + holidays (Thanksgiving, Christmas)
   # For intraday data: use 15 minutes
-  max_data_age_minutes: 4500  # ~75 hours (covers weekends + holidays)
+  max_data_age_minutes: 7200  # 5 days (covers Thanksgiving Wed→Mon, Christmas week)
   max_daily_change_percent: 50
 
 # ===== RECONCILIATION =====

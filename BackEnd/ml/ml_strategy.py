@@ -87,7 +87,8 @@ class MLEnhancedStrategy(USAStrategy):
         )
     
     def generate_signal(self, df: pd.DataFrame, symbol: str,
-                        current_position: Optional[Dict] = None) -> EnhancedTradeSignal:
+                        current_position: Optional[Dict] = None,
+                        market_bearish: Optional[bool] = None) -> EnhancedTradeSignal:
         """
         Generate ML-enhanced trading signal.
         
@@ -95,12 +96,15 @@ class MLEnhancedStrategy(USAStrategy):
             df: DataFrame with OHLCV data
             symbol: Stock symbol
             current_position: Current position info if any
+            market_bearish: For dip-buy: True when index (e.g. SPY) is below its SMA
             
         Returns:
             EnhancedTradeSignal with ML confidence
         """
-        # Get base signal from parent class
-        base_signal = super().generate_signal(df, symbol, current_position)
+        # Get base signal from parent class (includes dip-buy when enabled)
+        base_signal = super().generate_signal(
+            df, symbol, current_position, market_bearish=market_bearish
+        )
         
         # If no actionable signal, return enhanced version without ML
         if base_signal.signal == Signal.HOLD:
