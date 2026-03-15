@@ -111,3 +111,8 @@ bd
 # Temporary setup scripts
 create_beads_issues.ps1
 create_issues.txt
+
+# md
+BEADS_USAGE_EXAMPLE.md
+AGENTS.md
+AGENT_STRUCTURE.md
